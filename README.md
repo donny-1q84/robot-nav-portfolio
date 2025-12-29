@@ -32,6 +32,14 @@ Enable EKF localization (shows estimated trajectory):
 navsim-demo --localization
 ```
 
+## Benchmark
+Run a batch of random start/goal trials and write metrics to CSV:
+```bash
+navsim-benchmark --trials 50 --csv reports/benchmark.csv
+```
+Benchmark options include `--local-planner`, `--seed`, and `--config`.
+See `docs/benchmark.md` for metric definitions.
+
 ## Parameters
 ```
 --config path  Config file (default: configs/default.yaml)

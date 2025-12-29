@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 navsim-demo = "navsim.cli:main"
+navsim-benchmark = "navsim.benchmark:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
