@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import List, Tuple
 
 from .control import PurePursuitParams, pure_pursuit_control
+from .costmap import CostMap
+from .local_planner import DWAParams, dwa_control
 
 
 Pose = Tuple[float, float, float]
@@ -36,6 +38,38 @@ def simulate_path(
         v, omega, target_idx = pure_pursuit_control(
             (x, y, yaw), path, ctrl_params, target_idx
         )
+
+        x += v * math.cos(yaw) * params.dt
+        y += v * math.sin(yaw) * params.dt
+        yaw += omega * params.dt
+        poses.append((x, y, yaw))
+
+    return poses
+
+
+def simulate_dwa(
+    path: List[Point],
+    start_pose: Pose,
+    params: SimParams,
+    costmap: CostMap,
+    dwa_params: DWAParams,
+) -> List[Pose]:
+    poses: List[Pose] = [start_pose]
+    stuck_steps = 0
+
+    for _ in range(params.max_steps):
+        x, y, yaw = poses[-1]
+        gx, gy = path[-1]
+        if math.hypot(gx - x, gy - y) <= params.goal_tolerance:
+            break
+
+        v, omega, _ = dwa_control((x, y, yaw), path, costmap, dwa_params, params.dt)
+        if abs(v) < 1e-3 and abs(omega) < 1e-3:
+            stuck_steps += 1
+            if stuck_steps >= 10:
+                break
+        else:
+            stuck_steps = 0
 
         x += v * math.cos(yaw) * params.dt
         y += v * math.sin(yaw) * params.dt

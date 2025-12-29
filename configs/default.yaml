@@ -3,5 +3,16 @@ goal: [9, 9]
 output_png: output.png
 output_gif: null
 inflation_radius: 0.0
+local_planner: dwa
+dwa:
+  v_min: 0.0
+  v_max: 1.0
+  omega_max: 2.0
+  v_samples: 5
+  omega_samples: 11
+  horizon: 1.5
+  goal_weight: 1.0
+  path_weight: 0.4
+  clearance_weight: 0.2
 lookahead: 0.8
 speed: 0.8

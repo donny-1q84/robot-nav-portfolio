@@ -30,6 +30,7 @@ navsim-demo --gif output.gif
 --png path      Output PNG path (default: output.png)
 --gif path      Optional GIF path
 --inflation-radius  Obstacle inflation radius (grid units)
+--local-planner     Local planner: pure_pursuit or dwa
 --lookahead     Pure pursuit lookahead (default: 0.8)
 --speed         Linear speed (default: 0.8)
 ```
@@ -37,9 +38,12 @@ navsim-demo --gif output.gif
 ## Design Notes
 - **Grid map**: hard-coded demo map in `navsim/map.py`.
 - **Planner**: 4-connected A* with Manhattan heuristic.
+- **Local Planner**: DWA-lite (trajectory rollout + scoring).
 - **Controller**: Pure Pursuit with unicycle kinematics.
 - **Costmap**: obstacle inflation for a conservative planning footprint.
 - **Visualization**: map, planned path, and executed trajectory.
+
+Local planner parameters live in `configs/default.yaml` under `dwa`.
 
 ## Trade-offs
 - No dynamic obstacle handling or replanning.
