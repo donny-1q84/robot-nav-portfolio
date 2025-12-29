@@ -136,8 +136,8 @@ def run_demo(
 
     path = _grid_to_path(plan.path)
     start_pose = (float(cfg.start[0]), float(cfg.start[1]), 0.0)
-    poses = []
-    est_poses = None
+    poses: list[Tuple[float, float, float]] = []
+    est_poses: list[Tuple[float, float, float]] | None = None
 
     if cfg.localization_enabled:
         if cfg.dynamic_enabled and dynamic_field is not None:

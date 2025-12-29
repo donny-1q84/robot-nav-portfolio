@@ -44,6 +44,12 @@ See `docs/benchmark.md` for metric definitions.
 
 ![Benchmark summary](docs/assets/benchmark_summary.png)
 
+## Dev Tooling
+```bash
+.venv/bin/pip install -e .[dev]
+pre-commit install
+```
+
 ## Parameters
 ```
 --config path  Config file (default: configs/default.yaml)
@@ -84,5 +90,6 @@ Local planner parameters live in `configs/default.yaml` under `dwa`.
 ```bash
 .venv/bin/pip install -e .[dev]
 .venv/bin/ruff check .
+.venv/bin/mypy navsim scripts tests
 .venv/bin/pytest -q
 ```

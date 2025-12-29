@@ -18,6 +18,9 @@ dependencies = [
 dev = [
   "pytest",
   "ruff",
+  "mypy",
+  "pre-commit",
+  "types-PyYAML",
 ]
 
 [project.scripts]
@@ -34,3 +37,8 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
+warn_unused_ignores = true
