@@ -1,5 +1,9 @@
 # Release Notes
 
+## v0.3.1
+- Scheduled benchmark workflow with artifact uploads.
+- Benchmark reports refreshed (200 trials) and comparison assets updated.
+
 ## v0.3.0
 - Global planner comparison (A*, Dijkstra, Theta*).
 - Local costmap window for DWA and collision checks.

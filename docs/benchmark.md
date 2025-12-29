@@ -25,6 +25,10 @@ navsim-benchmark --suite --trials 50
 .venv/bin/python scripts/update_benchmark_report.py
 ```
 
+## CI Schedule
+A weekly benchmark workflow runs in GitHub Actions and uploads the CSVs and
+plots as artifacts.
+
 ## Plot
 ```bash
 .venv/bin/python scripts/plot_benchmark.py --csv reports/benchmark.csv \

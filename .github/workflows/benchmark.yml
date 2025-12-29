@@ -1,0 +1,40 @@
+name: Benchmark
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    env:
+      TRIALS: "100"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Run benchmark suite
+        run: |
+          navsim-benchmark --suite --trials "$TRIALS"
+          navsim-benchmark --trials "$TRIALS" --csv reports/benchmark.csv
+      - name: Generate plots
+        run: |
+          python scripts/plot_benchmark.py --csv reports/benchmark.csv \
+            --out docs/assets/benchmark_summary.png
+          python scripts/plot_benchmark_compare.py \
+            --summary-csv reports/benchmark_summary.csv \
+            --out docs/assets/benchmark_compare.png
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: navsim-benchmark
+          path: |
+            reports/*.csv
+            docs/assets/benchmark_summary.png
+            docs/assets/benchmark_compare.png
