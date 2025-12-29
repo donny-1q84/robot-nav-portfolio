@@ -1,3 +1,13 @@
+Metadata-Version: 2.4
+Name: navsim
+Version: 0.1.0
+Summary: Minimal 2D robot navigation demo with planning and control.
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: matplotlib
+Requires-Dist: imageio
+Requires-Dist: pyyaml
+
 # Robot Navigation Portfolio Demo
 
 This project is a minimal closed-loop 2D navigation demo:
