@@ -6,6 +6,10 @@ This project is a minimal closed-loop 2D navigation demo:
 - Pure Pursuit control on a unicycle model
 - Matplotlib visualization (PNG, optional GIF)
 
+## Demo
+
+![Demo result](docs/assets/output.png)
+
 ## Quick Start
 ```bash
 python -m scripts.run_demo --start 0,0 --goal 9,9 --png output.png
