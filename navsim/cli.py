@@ -8,6 +8,8 @@ from typing import Tuple
 import yaml
 
 from navsim.control import PurePursuitParams
+from navsim.costmap import CostMap
+from navsim.collision import path_in_collision, trajectory_in_collision
 from navsim.map import GridMap, demo_grid
 from navsim.planner import astar
 from navsim.sim import SimParams, simulate_path
@@ -20,6 +22,7 @@ class DemoConfig:
     goal: Tuple[int, int]
     output_png: Path
     output_gif: Path | None
+    inflation_radius: float
     lookahead: float
     speed: float
 
@@ -38,6 +41,7 @@ def _load_config(path: Path) -> DemoConfig:
         goal=tuple(data.get("goal", [9, 9])),
         output_png=Path(data.get("output_png", "output.png")),
         output_gif=Path(data["output_gif"]) if data.get("output_gif") else None,
+        inflation_radius=float(data.get("inflation_radius", 0.0)),
         lookahead=float(data.get("lookahead", 0.8)),
         speed=float(data.get("speed", 0.8)),
     )
@@ -53,7 +57,9 @@ def run_demo(
     out_png: Path | None = None,
     out_gif: Path | None = None,
 ) -> None:
-    plan = astar(grid, cfg.start, cfg.goal)
+    costmap = CostMap.from_grid(grid, cfg.inflation_radius)
+    plan_map = costmap.inflated_map()
+    plan = astar(plan_map, cfg.start, cfg.goal)
     if plan is None:
         raise SystemExit("No path found for the given start/goal.")
 
@@ -67,11 +73,40 @@ def run_demo(
     )
 
     png_path = out_png if out_png is not None else cfg.output_png
-    plot_scene(grid, path, poses, cfg.start, cfg.goal, str(png_path))
+    if path_in_collision(costmap, path):
+        print("Warning: planned path intersects inflated obstacles.")
+    if trajectory_in_collision(costmap, poses):
+        print("Warning: trajectory intersects inflated obstacles.")
+
+    plot_scene(
+        grid,
+        path,
+        poses,
+        cfg.start,
+        cfg.goal,
+        str(png_path),
+        display_grid=costmap.inflated,
+    )
     if out_gif is not None:
-        render_gif(grid, path, poses, cfg.start, cfg.goal, str(out_gif))
+        render_gif(
+            grid,
+            path,
+            poses,
+            cfg.start,
+            cfg.goal,
+            str(out_gif),
+            display_grid=costmap.inflated,
+        )
     elif cfg.output_gif is not None:
-        render_gif(grid, path, poses, cfg.start, cfg.goal, str(cfg.output_gif))
+        render_gif(
+            grid,
+            path,
+            poses,
+            cfg.start,
+            cfg.goal,
+            str(cfg.output_gif),
+            display_grid=costmap.inflated,
+        )
 
 
 def main() -> None:
@@ -81,6 +116,7 @@ def main() -> None:
     parser.add_argument("--goal", type=_parse_point, default=None)
     parser.add_argument("--png", type=Path, default=None)
     parser.add_argument("--gif", type=Path, default=None)
+    parser.add_argument("--inflation-radius", type=float, default=None)
     parser.add_argument("--lookahead", type=float, default=None)
     parser.add_argument("--speed", type=float, default=None)
     args = parser.parse_args()
@@ -94,6 +130,8 @@ def main() -> None:
         cfg.output_png = args.png
     if args.gif is not None:
         cfg.output_gif = args.gif
+    if args.inflation_radius is not None:
+        cfg.inflation_radius = args.inflation_radius
     if args.lookahead is not None:
         cfg.lookahead = args.lookahead
     if args.speed is not None:

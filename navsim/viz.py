@@ -18,9 +18,11 @@ def plot_scene(
     start: Tuple[int, int],
     goal: Tuple[int, int],
     out_path: str,
+    display_grid: List[List[int]] | None = None,
 ) -> None:
     fig, ax = plt.subplots(figsize=(6, 6))
-    ax.imshow(grid.grid, cmap="Greys", origin="lower")
+    grid_data = display_grid if display_grid is not None else grid.grid
+    ax.imshow(grid_data, cmap="Greys", origin="lower")
 
     if path:
         xs = [p[0] for p in path]
@@ -53,13 +55,15 @@ def render_gif(
     goal: Tuple[int, int],
     out_path: str,
     step: int = 3,
+    display_grid: List[List[int]] | None = None,
 ) -> None:
     import imageio.v2 as imageio
 
     frames = []
     for i in range(1, len(poses) + 1, step):
         fig, ax = plt.subplots(figsize=(6, 6))
-        ax.imshow(grid.grid, cmap="Greys", origin="lower")
+        grid_data = display_grid if display_grid is not None else grid.grid
+        ax.imshow(grid_data, cmap="Greys", origin="lower")
         if path:
             xs = [p[0] for p in path]
             ys = [p[1] for p in path]

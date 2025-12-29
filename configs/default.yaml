@@ -2,5 +2,6 @@ start: [0, 0]
 goal: [9, 9]
 output_png: output.png
 output_gif: null
+inflation_radius: 0.0
 lookahead: 0.8
 speed: 0.8

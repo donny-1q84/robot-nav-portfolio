@@ -29,6 +29,7 @@ navsim-demo --gif output.gif
 --goal x,y      Goal grid cell
 --png path      Output PNG path (default: output.png)
 --gif path      Optional GIF path
+--inflation-radius  Obstacle inflation radius (grid units)
 --lookahead     Pure pursuit lookahead (default: 0.8)
 --speed         Linear speed (default: 0.8)
 ```
@@ -37,6 +38,7 @@ navsim-demo --gif output.gif
 - **Grid map**: hard-coded demo map in `navsim/map.py`.
 - **Planner**: 4-connected A* with Manhattan heuristic.
 - **Controller**: Pure Pursuit with unicycle kinematics.
+- **Costmap**: obstacle inflation for a conservative planning footprint.
 - **Visualization**: map, planned path, and executed trajectory.
 
 ## Trade-offs
