@@ -7,12 +7,12 @@ from typing import List, Tuple
 
 from .collision import path_in_collision
 from .control import PurePursuitParams, pure_pursuit_control
-from .costmap import CostMap
+from .costmap import CostMap, LocalCostmapParams
 from .dynamic import DynamicObstacleField
 from .local_planner import DWAParams, dwa_control
 from .localization import EKF, LocalizationParams
 from .map import GridMap
-from .planner import astar
+from .planner import plan_path
 from .sensors import noisy_control, noisy_position
 
 Pose = Tuple[float, float, float]
@@ -102,6 +102,7 @@ def simulate_dwa(
     params: SimParams,
     costmap: CostMap,
     dwa_params: DWAParams,
+    local_params: LocalCostmapParams | None = None,
 ) -> List[Pose]:
     poses: List[Pose] = [start_pose]
     stuck_steps = 0
@@ -112,7 +113,14 @@ def simulate_dwa(
         if math.hypot(gx - x, gy - y) <= params.goal_tolerance:
             break
 
-        v, omega, _ = dwa_control((x, y, yaw), path, costmap, dwa_params, params.dt)
+        active_costmap = costmap
+        if local_params and local_params.enabled:
+            active_costmap = costmap.windowed(
+                (x, y), local_params.radius, local_params.unknown_as_obstacle
+            )
+        v, omega, _ = dwa_control(
+            (x, y, yaw), path, active_costmap, dwa_params, params.dt
+        )
         if abs(v) < 1e-3 and abs(omega) < 1e-3:
             stuck_steps += 1
             if stuck_steps >= 10:
@@ -135,6 +143,7 @@ def simulate_dwa_localized(
     costmap: CostMap,
     dwa_params: DWAParams,
     loc_params: LocalizationParams,
+    local_params: LocalCostmapParams | None = None,
 ) -> Tuple[List[Pose], List[Pose]]:
     rng = random.Random(loc_params.seed)
     ekf = EKF(start_pose, loc_params)
@@ -148,7 +157,14 @@ def simulate_dwa_localized(
         if math.hypot(gx - est_pose[0], gy - est_pose[1]) <= params.goal_tolerance:
             break
 
-        v, omega, _ = dwa_control(est_pose, path, costmap, dwa_params, params.dt)
+        active_costmap = costmap
+        if local_params and local_params.enabled:
+            active_costmap = costmap.windowed(
+                (est_pose[0], est_pose[1]),
+                local_params.radius,
+                local_params.unknown_as_obstacle,
+            )
+        v, omega, _ = dwa_control(est_pose, path, active_costmap, dwa_params, params.dt)
         if abs(v) < 1e-3 and abs(omega) < 1e-3:
             stuck_steps += 1
             if stuck_steps >= 10:
@@ -188,6 +204,8 @@ def simulate_dwa_dynamic(
     goal: Tuple[int, int],
     replan_interval: int,
     max_replans: int,
+    global_planner: str,
+    local_params: LocalCostmapParams | None = None,
 ) -> Tuple[List[Pose], List[Point]]:
     poses: List[Pose] = [start_pose]
     current_path = path
@@ -202,7 +220,7 @@ def simulate_dwa_dynamic(
             break
 
         dynamic_field.step(params.dt, base_grid)
-        costmap = CostMap.from_grid(
+        full_costmap = CostMap.from_grid(
             base_grid,
             inflation_radius,
             occupied=dynamic_field.cells(base_grid),
@@ -211,12 +229,12 @@ def simulate_dwa_dynamic(
         needs_replan = False
         if replan_interval > 0 and steps_since_replan >= replan_interval:
             needs_replan = True
-        if path_in_collision(costmap, current_path):
+        if path_in_collision(full_costmap, current_path):
             needs_replan = True
 
         if needs_replan:
             start_cell = _pose_to_cell(poses[-1])
-            plan = astar(costmap.inflated_map(), start_cell, goal)
+            plan = plan_path(full_costmap.inflated_map(), start_cell, goal, global_planner)
             if plan is None:
                 break
             current_path = _grid_to_path(plan.path)
@@ -225,10 +243,15 @@ def simulate_dwa_dynamic(
             if replans >= max_replans:
                 break
 
+        active_costmap = full_costmap
+        if local_params and local_params.enabled:
+            active_costmap = full_costmap.windowed(
+                (x, y), local_params.radius, local_params.unknown_as_obstacle
+            )
         v, omega, _ = dwa_control(
             (x, y, yaw),
             current_path,
-            costmap,
+            active_costmap,
             dwa_params,
             params.dt,
         )
@@ -260,6 +283,8 @@ def simulate_dwa_dynamic_localized(
     replan_interval: int,
     max_replans: int,
     loc_params: LocalizationParams,
+    global_planner: str,
+    local_params: LocalCostmapParams | None = None,
 ) -> Tuple[List[Pose], List[Pose], List[Point]]:
     rng = random.Random(loc_params.seed)
     ekf = EKF(start_pose, loc_params)
@@ -277,7 +302,7 @@ def simulate_dwa_dynamic_localized(
             break
 
         dynamic_field.step(params.dt, base_grid)
-        costmap = CostMap.from_grid(
+        full_costmap = CostMap.from_grid(
             base_grid,
             inflation_radius,
             occupied=dynamic_field.cells(base_grid),
@@ -286,12 +311,12 @@ def simulate_dwa_dynamic_localized(
         needs_replan = False
         if replan_interval > 0 and steps_since_replan >= replan_interval:
             needs_replan = True
-        if path_in_collision(costmap, current_path):
+        if path_in_collision(full_costmap, current_path):
             needs_replan = True
 
         if needs_replan:
             start_cell = _pose_to_cell(est_pose)
-            plan = astar(costmap.inflated_map(), start_cell, goal)
+            plan = plan_path(full_costmap.inflated_map(), start_cell, goal, global_planner)
             if plan is None:
                 break
             current_path = _grid_to_path(plan.path)
@@ -300,7 +325,16 @@ def simulate_dwa_dynamic_localized(
             if replans >= max_replans:
                 break
 
-        v, omega, _ = dwa_control(est_pose, current_path, costmap, dwa_params, params.dt)
+        active_costmap = full_costmap
+        if local_params and local_params.enabled:
+            active_costmap = full_costmap.windowed(
+                (est_pose[0], est_pose[1]),
+                local_params.radius,
+                local_params.unknown_as_obstacle,
+            )
+        v, omega, _ = dwa_control(
+            est_pose, current_path, active_costmap, dwa_params, params.dt
+        )
         if abs(v) < 1e-3 and abs(omega) < 1e-3:
             stuck_steps += 1
             if stuck_steps >= 10:

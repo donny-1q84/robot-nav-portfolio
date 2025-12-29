@@ -3,9 +3,11 @@ repos:
     rev: v0.14.10
     hooks:
       - id: ruff
-        args: ["check", "."]
+        args: ["--fix", "--exit-non-zero-on-fix"]
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.1
     hooks:
       - id: mypy
         args: ["navsim", "scripts", "tests"]
+        pass_filenames: false
+        additional_dependencies: ["types-PyYAML"]

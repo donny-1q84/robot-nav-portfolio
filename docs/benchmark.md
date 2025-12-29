@@ -18,6 +18,13 @@ simulates execution, and writes per-trial metrics to CSV.
 navsim-benchmark --trials 50 --csv reports/benchmark.csv
 ```
 
+## Planner Comparison
+```bash
+navsim-benchmark --suite --trials 50
+.venv/bin/python scripts/plot_benchmark_compare.py
+.venv/bin/python scripts/update_benchmark_report.py
+```
+
 ## Plot
 ```bash
 .venv/bin/python scripts/plot_benchmark.py --csv reports/benchmark.csv \

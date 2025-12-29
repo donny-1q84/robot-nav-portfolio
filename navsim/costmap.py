@@ -7,6 +7,7 @@ from typing import Iterable, Tuple
 from .map import Grid, GridMap
 
 Node = Tuple[int, int]
+Point = Tuple[float, float]
 
 
 def _overlay_grid(grid: Grid, occupied: Iterable[Node]) -> Grid:
@@ -79,3 +80,27 @@ class CostMap:
 
     def inflated_map(self) -> GridMap:
         return GridMap(grid=self.inflated)
+
+    def windowed(
+        self,
+        center: Point,
+        radius: float,
+        unknown_as_obstacle: bool = False,
+    ) -> "CostMap":
+        if radius <= 0.0:
+            return self
+        cx, cy = center
+        radius_sq = radius * radius
+        windowed = [row[:] for row in self.inflated]
+        for y in range(self.height):
+            for x in range(self.width):
+                if (x - cx) * (x - cx) + (y - cy) * (y - cy) > radius_sq:
+                    windowed[y][x] = 1 if unknown_as_obstacle else 0
+        return CostMap(base=self.base, inflated=windowed, inflation_radius=self.inflation_radius)
+
+
+@dataclass(frozen=True)
+class LocalCostmapParams:
+    enabled: bool = False
+    radius: float = 4.0
+    unknown_as_obstacle: bool = False

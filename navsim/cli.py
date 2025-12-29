@@ -9,12 +9,12 @@ import yaml
 
 from navsim.collision import path_in_collision, trajectory_in_collision
 from navsim.control import PurePursuitParams
-from navsim.costmap import CostMap
+from navsim.costmap import CostMap, LocalCostmapParams
 from navsim.dynamic import DynamicObstacle, DynamicObstacleField
 from navsim.local_planner import DWAParams
 from navsim.localization import LocalizationParams
 from navsim.map import GridMap, demo_grid
-from navsim.planner import astar
+from navsim.planner import plan_path
 from navsim.sensors import SensorNoise
 from navsim.sim import (
     SimParams,
@@ -35,12 +35,14 @@ class DemoConfig:
     output_png: Path
     output_gif: Path | None
     inflation_radius: float
+    global_planner: str
     local_planner: str
     dwa: DWAParams
     dynamic_enabled: bool
     dynamic_replan_interval: int
     dynamic_max_replans: int
     dynamic_obstacles: List[DynamicObstacle]
+    local_costmap: LocalCostmapParams
     localization_enabled: bool
     localization: LocalizationParams
     lookahead: float
@@ -58,6 +60,7 @@ def _load_config(path: Path) -> DemoConfig:
     data = yaml.safe_load(path.read_text()) or {}
     dwa_cfg = data.get("dwa", {}) or {}
     dyn_cfg = data.get("dynamic_obstacles", {}) or {}
+    local_cfg = data.get("local_costmap", {}) or {}
     loc_cfg = data.get("localization", {}) or {}
     noise_cfg = loc_cfg.get("noise", {}) or {}
     obstacles: List[DynamicObstacle] = []
@@ -78,6 +81,7 @@ def _load_config(path: Path) -> DemoConfig:
         output_png=Path(data.get("output_png", "output.png")),
         output_gif=Path(data["output_gif"]) if data.get("output_gif") else None,
         inflation_radius=float(data.get("inflation_radius", 0.0)),
+        global_planner=str(data.get("global_planner", "astar")),
         local_planner=str(data.get("local_planner", "dwa")),
         dwa=DWAParams(
             v_min=float(dwa_cfg.get("v_min", 0.0)),
@@ -94,6 +98,11 @@ def _load_config(path: Path) -> DemoConfig:
         dynamic_replan_interval=int(dyn_cfg.get("replan_interval", 10)),
         dynamic_max_replans=int(dyn_cfg.get("max_replans", 50)),
         dynamic_obstacles=obstacles,
+        local_costmap=LocalCostmapParams(
+            enabled=bool(local_cfg.get("enabled", False)),
+            radius=float(local_cfg.get("radius", 4.0)),
+            unknown_as_obstacle=bool(local_cfg.get("unknown_as_obstacle", False)),
+        ),
         localization_enabled=bool(loc_cfg.get("enabled", False)),
         localization=LocalizationParams(
             noise=SensorNoise(
@@ -130,7 +139,7 @@ def run_demo(
         grid, cfg.inflation_radius, occupied=dynamic_cells
     )
     plan_map = costmap.inflated_map()
-    plan = astar(plan_map, cfg.start, cfg.goal)
+    plan = plan_path(plan_map, cfg.start, cfg.goal, cfg.global_planner)
     if plan is None:
         raise SystemExit("No path found for the given start/goal.")
 
@@ -155,6 +164,8 @@ def run_demo(
                 cfg.dynamic_replan_interval,
                 cfg.dynamic_max_replans,
                 cfg.localization,
+                cfg.global_planner,
+                cfg.local_costmap,
             )
             costmap = CostMap.from_grid(
                 grid,
@@ -169,6 +180,7 @@ def run_demo(
                 costmap,
                 cfg.dwa,
                 cfg.localization,
+                cfg.local_costmap,
             )
         else:
             poses, est_poses = simulate_path_localized(
@@ -193,6 +205,8 @@ def run_demo(
                 cfg.goal,
                 cfg.dynamic_replan_interval,
                 cfg.dynamic_max_replans,
+                cfg.global_planner,
+                cfg.local_costmap,
             )
             costmap = CostMap.from_grid(
                 grid,
@@ -200,7 +214,9 @@ def run_demo(
                 occupied=dynamic_field.cells(grid),
             )
         elif cfg.local_planner == "dwa":
-            poses = simulate_dwa(path, start_pose, SimParams(), costmap, cfg.dwa)
+            poses = simulate_dwa(
+                path, start_pose, SimParams(), costmap, cfg.dwa, cfg.local_costmap
+            )
         else:
             poses = simulate_path(
                 path,
@@ -258,8 +274,26 @@ def main() -> None:
     parser.add_argument("--gif", type=Path, default=None)
     parser.add_argument("--inflation-radius", type=float, default=None)
     parser.add_argument(
+        "--global-planner",
+        choices=["astar", "dijkstra", "theta"],
+        default=None,
+    )
+    parser.add_argument(
         "--local-planner",
         choices=["pure_pursuit", "dwa"],
+        default=None,
+    )
+    parser.add_argument("--local-window-radius", type=float, default=None)
+    parser.add_argument(
+        "--local-window-unknown",
+        dest="local_unknown",
+        action="store_true",
+        default=None,
+    )
+    parser.add_argument(
+        "--no-local-window",
+        dest="disable_local_window",
+        action="store_true",
         default=None,
     )
     parser.add_argument(
@@ -303,8 +337,28 @@ def main() -> None:
         cfg.output_gif = args.gif
     if args.inflation_radius is not None:
         cfg.inflation_radius = args.inflation_radius
+    if args.global_planner is not None:
+        cfg.global_planner = args.global_planner
     if args.local_planner is not None:
         cfg.local_planner = args.local_planner
+    if args.local_window_radius is not None:
+        cfg.local_costmap = LocalCostmapParams(
+            enabled=True,
+            radius=args.local_window_radius,
+            unknown_as_obstacle=cfg.local_costmap.unknown_as_obstacle,
+        )
+    if args.local_unknown is not None:
+        cfg.local_costmap = LocalCostmapParams(
+            enabled=cfg.local_costmap.enabled,
+            radius=cfg.local_costmap.radius,
+            unknown_as_obstacle=args.local_unknown,
+        )
+    if args.disable_local_window is not None:
+        cfg.local_costmap = LocalCostmapParams(
+            enabled=False,
+            radius=cfg.local_costmap.radius,
+            unknown_as_obstacle=cfg.local_costmap.unknown_as_obstacle,
+        )
     if args.dynamic_enabled is not None:
         cfg.dynamic_enabled = args.dynamic_enabled
     if args.replan_interval is not None:

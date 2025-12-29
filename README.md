@@ -41,10 +41,28 @@ navsim-benchmark --trials 50 --csv reports/benchmark.csv
 ```
 Benchmark options include `--local-planner`, `--seed`, and `--config`.
 See `docs/benchmark.md` for metric definitions.
+To compare global planners and generate a summary table:
+```bash
+navsim-benchmark --suite --trials 50
+.venv/bin/python scripts/plot_benchmark_compare.py
+.venv/bin/python scripts/update_benchmark_report.py
+```
 
 ## Benchmark Summary
 
 ![Benchmark summary](docs/assets/benchmark_summary.png)
+
+## Benchmark Comparison
+
+![Benchmark comparison](docs/assets/benchmark_compare.png)
+
+<!-- BENCHMARK_TABLE_START -->
+| Planner | Plan Success | Success | Collision | Avg Steps | Avg Path | Avg Traj | Avg Final Dist | Avg ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| astar | 100% | 80% | 0% | 79.8 | 6.05 | 5.33 | 0.83 | 241.36 |
+| dijkstra | 100% | 82% | 0% | 79.6 | 6.07 | 5.32 | 0.80 | 230.75 |
+| theta | 100% | 84% | 0% | 86.9 | 5.08 | 5.51 | 0.58 | 229.44 |
+<!-- BENCHMARK_TABLE_END -->
 
 ## Dev Tooling
 ```bash
@@ -60,7 +78,11 @@ pre-commit install
 --png path      Output PNG path (default: output.png)
 --gif path      Optional GIF path
 --inflation-radius  Obstacle inflation radius (grid units)
+--global-planner    Global planner: astar, dijkstra, theta
 --local-planner     Local planner: pure_pursuit or dwa
+--local-window-radius  Local costmap radius (enables local window)
+--local-window-unknown  Treat outside window as obstacles
+--no-local-window   Disable local costmap window
 --dynamic       Enable dynamic obstacles (uses DWA)
 --no-dynamic    Disable dynamic obstacles
 --replan-interval  Steps between replans (default from config)
@@ -73,10 +95,11 @@ pre-commit install
 
 ## Design Notes
 - **Grid map**: hard-coded demo map in `navsim/map.py`.
-- **Planner**: 4-connected A* with Manhattan heuristic.
+- **Planner**: A*, Dijkstra, and Theta* (global).
 - **Local Planner**: DWA-lite (trajectory rollout + scoring).
 - **Controller**: Pure Pursuit with unicycle kinematics.
 - **Costmap**: obstacle inflation for a conservative planning footprint.
+- **Local costmap**: rolling window for local planning and collision checks.
 - **Dynamic obstacles**: moving obstacles + periodic replanning.
 - **Localization**: EKF with noisy odometry + position measurements.
 - **Visualization**: map, planned path, and executed trajectory.

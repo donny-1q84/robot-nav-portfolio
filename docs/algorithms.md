@@ -1,13 +1,20 @@
 # Algorithms
 
 ## Planning
-The planner uses A* on a 4-connected grid. Each move costs 1, and the heuristic
-is Manhattan distance, which is admissible for 4-connected grids.
+The global planner supports:
+- **A*** (Manhattan heuristic on a 4-connected grid)
+- **Dijkstra** (A* with zero heuristic)
+- **Theta\*** (any-angle planning with line-of-sight shortcuts)
 
 ## Costmap & Collision
 Obstacles can be inflated by a configurable radius to create a conservative
 costmap. Collision checks treat any pose that maps to an inflated cell as a
 collision and also consider out-of-bounds positions as collisions.
+
+## Local Costmap
+Local planning can use a rolling window that masks obstacles outside a radius,
+mirroring a limited sensor range. This reduces compute and keeps DWA focused on
+nearby hazards.
 
 ## Local Planning
 The local planner uses a simplified Dynamic Window Approach (DWA). It samples

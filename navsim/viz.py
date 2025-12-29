@@ -90,7 +90,7 @@ def render_gif(
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
         fig.canvas.draw()
-        frame = imageio.imread(fig.canvas.buffer_rgba())  # type: ignore[attr-defined]
+        frame = imageio.imread(fig.canvas.buffer_rgba())
         frames.append(frame)
         plt.close(fig)
 

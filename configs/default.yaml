@@ -3,6 +3,7 @@ goal: [9, 9]
 output_png: output.png
 output_gif: null
 inflation_radius: 0.0
+global_planner: astar
 local_planner: dwa
 dwa:
   v_min: 0.0
@@ -14,6 +15,10 @@ dwa:
   goal_weight: 1.0
   path_weight: 0.4
   clearance_weight: 0.2
+local_costmap:
+  enabled: false
+  radius: 4.0
+  unknown_as_obstacle: false
 dynamic_obstacles:
   enabled: false
   replan_interval: 10

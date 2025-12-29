@@ -17,7 +17,7 @@ from navsim.costmap import CostMap
 from navsim.local_planner import DWAParams
 from navsim.map import GridMap, demo_grid
 from navsim.metrics import final_distance, goal_reached, path_length, trajectory_length
-from navsim.planner import astar
+from navsim.planner import plan_path
 from navsim.sim import SimParams, simulate_dwa, simulate_path
 
 Node = Tuple[int, int]
@@ -27,6 +27,7 @@ Point = Tuple[float, float]
 @dataclass
 class BenchmarkConfig:
     inflation_radius: float
+    global_planner: str
     local_planner: str
     lookahead: float
     speed: float
@@ -38,6 +39,7 @@ def _load_config(path: Path) -> BenchmarkConfig:
     dwa_cfg = data.get("dwa", {}) or {}
     return BenchmarkConfig(
         inflation_radius=float(data.get("inflation_radius", 0.0)),
+        global_planner=str(data.get("global_planner", "astar")),
         local_planner=str(data.get("local_planner", "dwa")),
         lookahead=float(data.get("lookahead", 0.8)),
         speed=float(data.get("speed", 0.8)),
@@ -74,6 +76,12 @@ def _sample_start_goal(rng: random.Random, cells: List[Node]) -> Tuple[Node, Nod
     return start, goal
 
 
+def _sample_pairs(
+    rng: random.Random, cells: List[Node], trials: int
+) -> List[Tuple[Node, Node]]:
+    return [_sample_start_goal(rng, cells) for _ in range(trials)]
+
+
 def _grid_to_path(plan: List[Node]) -> List[Point]:
     return [(float(x), float(y)) for x, y in plan]
 
@@ -82,13 +90,13 @@ def run_trial(
     grid: GridMap,
     costmap: CostMap,
     cfg: BenchmarkConfig,
-    rng: random.Random,
     sim_params: SimParams,
-    free_cells: List[Node],
+    start: Node,
+    goal: Node,
+    global_planner: str,
 ) -> dict:
-    start, goal = _sample_start_goal(rng, free_cells)
     t0 = time.perf_counter()
-    plan = astar(costmap.inflated_map(), start, goal)
+    plan = plan_path(costmap.inflated_map(), start, goal, global_planner)
     if plan is None:
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         return {
@@ -96,6 +104,7 @@ def run_trial(
             "start_y": start[1],
             "goal_x": goal[0],
             "goal_y": goal[1],
+            "global_planner": global_planner,
             "plan_found": 0,
             "success": 0,
             "steps": 0,
@@ -126,6 +135,7 @@ def run_trial(
         "start_y": start[1],
         "goal_x": goal[0],
         "goal_y": goal[1],
+        "global_planner": global_planner,
         "plan_found": 1,
         "success": int(success),
         "steps": max(0, len(poses) - 1),
@@ -135,6 +145,20 @@ def run_trial(
         "collision": int(collision),
         "elapsed_ms": elapsed_ms,
     }
+
+
+def run_benchmark(
+    grid: GridMap,
+    costmap: CostMap,
+    cfg: BenchmarkConfig,
+    sim_params: SimParams,
+    pairs: List[Tuple[Node, Node]],
+    global_planner: str,
+) -> List[dict]:
+    rows = []
+    for start, goal in pairs:
+        rows.append(run_trial(grid, costmap, cfg, sim_params, start, goal, global_planner))
+    return rows
 
 
 def _summarize(rows: List[dict]) -> dict:
@@ -159,8 +183,15 @@ def _summarize(rows: List[dict]) -> dict:
     }
 
 
-def _print_summary(summary: dict) -> None:
-    print("Benchmark summary")
+def summarize_rows(rows: List[dict], planner: str) -> dict:
+    summary = _summarize(rows)
+    summary["global_planner"] = planner
+    return summary
+
+
+def _print_summary(summary: dict, title: str | None = None) -> None:
+    heading = title or "Benchmark summary"
+    print(heading)
     print(f"Trials: {summary['trials']}")
     print(f"Plan success rate: {summary['plan_success_rate']:.2%}")
     print(f"Navigation success rate: {summary['success_rate']:.2%}")
@@ -170,6 +201,79 @@ def _print_summary(summary: dict) -> None:
     print(f"Avg trajectory length (success): {summary['avg_traj_length']:.2f}")
     print(f"Avg final distance: {summary['avg_final_distance']:.2f}")
     print(f"Avg elapsed ms: {summary['avg_elapsed_ms']:.2f}")
+
+
+def _write_csv(path: Path, rows: List[dict]) -> None:
+    if not rows:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _write_summary_csv(path: Path, summaries: List[dict]) -> None:
+    if not summaries:
+        return
+    fieldnames = [
+        "global_planner",
+        "trials",
+        "plan_success_rate",
+        "success_rate",
+        "collision_rate",
+        "avg_steps",
+        "avg_path_length",
+        "avg_traj_length",
+        "avg_final_distance",
+        "avg_elapsed_ms",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(summaries)
+
+
+def _summary_to_markdown(summaries: List[dict]) -> str:
+    headers = [
+        "Planner",
+        "Plan Success",
+        "Success",
+        "Collision",
+        "Avg Steps",
+        "Avg Path",
+        "Avg Traj",
+        "Avg Final Dist",
+        "Avg ms",
+    ]
+    lines = ["| " + " | ".join(headers) + " |", "| " + " | ".join(["---"] * len(headers)) + " |"]
+    for row in summaries:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    row["global_planner"],
+                    f"{row['plan_success_rate']:.0%}",
+                    f"{row['success_rate']:.0%}",
+                    f"{row['collision_rate']:.0%}",
+                    f"{row['avg_steps']:.1f}",
+                    f"{row['avg_path_length']:.2f}",
+                    f"{row['avg_traj_length']:.2f}",
+                    f"{row['avg_final_distance']:.2f}",
+                    f"{row['avg_elapsed_ms']:.2f}",
+                ]
+            )
+            + " |"
+        )
+    return "\n".join(lines)
+
+
+def _write_summary_md(path: Path, summaries: List[dict]) -> None:
+    if not summaries:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_summary_to_markdown(summaries))
 
 
 def main() -> None:
@@ -183,34 +287,58 @@ def main() -> None:
         choices=["pure_pursuit", "dwa"],
         default=None,
     )
+    parser.add_argument(
+        "--global-planner",
+        choices=["astar", "dijkstra", "theta"],
+        default=None,
+    )
+    parser.add_argument("--suite", action="store_true")
+    parser.add_argument(
+        "--summary-csv",
+        type=Path,
+        default=Path("reports/benchmark_summary.csv"),
+    )
+    parser.add_argument(
+        "--summary-md",
+        type=Path,
+        default=Path("reports/benchmark_summary.md"),
+    )
     args = parser.parse_args()
 
     cfg = _load_config(args.config)
     if args.local_planner is not None:
         cfg.local_planner = args.local_planner
+    if args.global_planner is not None:
+        cfg.global_planner = args.global_planner
 
     grid = demo_grid()
     costmap = CostMap.from_grid(grid, cfg.inflation_radius)
     free_cells = _free_cells(costmap)
     rng = random.Random(args.seed)
     sim_params = SimParams()
+    pairs = _sample_pairs(rng, free_cells, args.trials)
 
-    rows = []
-    for _ in range(args.trials):
-        rows.append(run_trial(grid, costmap, cfg, rng, sim_params, free_cells))
-
-    if not rows:
+    if not pairs:
         print("No trials to run.")
         return
 
-    args.csv.parent.mkdir(parents=True, exist_ok=True)
-    with args.csv.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
-
-    summary = _summarize(rows)
-    _print_summary(summary)
+    if args.suite:
+        planners = ["astar", "dijkstra", "theta"]
+        summaries = []
+        for planner in planners:
+            rows = run_benchmark(grid, costmap, cfg, sim_params, pairs, planner)
+            per_csv = Path(f"reports/benchmark_{planner}.csv")
+            _write_csv(per_csv, rows)
+            summary = summarize_rows(rows, planner)
+            summaries.append(summary)
+            _print_summary(summary, title=f"Benchmark summary ({planner})")
+        _write_summary_csv(args.summary_csv, summaries)
+        _write_summary_md(args.summary_md, summaries)
+    else:
+        rows = run_benchmark(grid, costmap, cfg, sim_params, pairs, cfg.global_planner)
+        _write_csv(args.csv, rows)
+        summary = summarize_rows(rows, cfg.global_planner)
+        _print_summary(summary, title=f"Benchmark summary ({cfg.global_planner})")
 
 
 if __name__ == "__main__":
