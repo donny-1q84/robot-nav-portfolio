@@ -1,5 +1,7 @@
 # Robot Navigation Portfolio Demo
 
+![CI](https://github.com/donny-1q84/robot-nav-portfolio/actions/workflows/ci.yml/badge.svg)
+
 This project is a minimal closed-loop 2D navigation demo:
 - Grid map with obstacles
 - A* path planning
