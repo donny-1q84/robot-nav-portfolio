@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from typing import Iterable, Tuple
 
-
 Point = Tuple[float, float]
 Pose = Tuple[float, float, float]
 

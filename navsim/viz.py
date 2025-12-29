@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 
 from .map import GridMap
 
-
 Point = Tuple[float, float]
 Pose = Tuple[float, float, float]
 

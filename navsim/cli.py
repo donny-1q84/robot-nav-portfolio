@@ -7,9 +7,9 @@ from typing import List, Tuple
 
 import yaml
 
+from navsim.collision import path_in_collision, trajectory_in_collision
 from navsim.control import PurePursuitParams
 from navsim.costmap import CostMap
-from navsim.collision import path_in_collision, trajectory_in_collision
 from navsim.dynamic import DynamicObstacle, DynamicObstacleField
 from navsim.local_planner import DWAParams
 from navsim.localization import LocalizationParams

@@ -6,7 +6,6 @@ from typing import List, Tuple
 
 from .sensors import SensorNoise
 
-
 Pose = Tuple[float, float, float]
 
 

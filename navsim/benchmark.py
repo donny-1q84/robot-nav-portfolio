@@ -20,7 +20,6 @@ from navsim.metrics import final_distance, goal_reached, path_length, trajectory
 from navsim.planner import astar
 from navsim.sim import SimParams, simulate_dwa, simulate_path
 
-
 Node = Tuple[int, int]
 Point = Tuple[float, float]
 

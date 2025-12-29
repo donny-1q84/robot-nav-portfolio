@@ -7,7 +7,6 @@ from typing import Iterable, List, Tuple
 from .collision import trajectory_in_collision
 from .costmap import CostMap
 
-
 Point = Tuple[float, float]
 Pose = Tuple[float, float, float]
 

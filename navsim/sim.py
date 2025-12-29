@@ -15,7 +15,6 @@ from .map import GridMap
 from .planner import astar
 from .sensors import noisy_control, noisy_position
 
-
 Pose = Tuple[float, float, float]
 Point = Tuple[float, float]
 

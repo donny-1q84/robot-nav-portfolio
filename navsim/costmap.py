@@ -6,7 +6,6 @@ from typing import Iterable, Tuple
 
 from .map import Grid, GridMap
 
-
 Node = Tuple[int, int]
 
 

@@ -82,5 +82,7 @@ Local planner parameters live in `configs/default.yaml` under `dwa`.
 
 ## Tests
 ```bash
-pytest
+.venv/bin/pip install -e .[dev]
+.venv/bin/ruff check .
+.venv/bin/pytest -q
 ```

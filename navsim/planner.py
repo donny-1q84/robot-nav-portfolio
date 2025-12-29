@@ -6,7 +6,6 @@ from typing import Dict, List, Optional, Tuple
 
 from .map import GridMap
 
-
 Node = Tuple[int, int]
 
 

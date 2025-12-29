@@ -4,7 +4,6 @@ from typing import Iterable, Tuple
 
 from .costmap import CostMap
 
-
 Point = Tuple[float, float]
 Pose = Tuple[float, float, float]
 
