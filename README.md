@@ -76,9 +76,9 @@ See `docs/benchmark.md` for metric definitions.
 Local planner parameters live in `configs/default.yaml` under `dwa`.
 
 ## Trade-offs
-- No dynamic obstacle handling or replanning.
-- Control and planning are decoupled for clarity.
-- Uses a simple grid and kinematics to keep the demo focused.
+- Dynamic obstacles use a simple bounce model without perception.
+- Localization relies on noisy position measurements (not map-based).
+- Local planning is simplified DWA without full dynamics or smoothing.
 
 ## Tests
 ```bash
