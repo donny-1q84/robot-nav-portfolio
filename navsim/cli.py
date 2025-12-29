@@ -201,6 +201,7 @@ def main() -> None:
         "--no-dynamic",
         dest="dynamic_enabled",
         action="store_false",
+        default=None,
     )
     parser.add_argument("--replan-interval", type=int, default=None)
     parser.add_argument("--max-replans", type=int, default=None)
