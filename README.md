@@ -40,6 +40,10 @@ navsim-benchmark --trials 50 --csv reports/benchmark.csv
 Benchmark options include `--local-planner`, `--seed`, and `--config`.
 See `docs/benchmark.md` for metric definitions.
 
+## Benchmark Summary
+
+![Benchmark summary](docs/assets/benchmark_summary.png)
+
 ## Parameters
 ```
 --config path  Config file (default: configs/default.yaml)
