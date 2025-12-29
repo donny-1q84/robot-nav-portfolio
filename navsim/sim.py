@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import dataclass
 from typing import List, Tuple
 
@@ -9,8 +10,10 @@ from .control import PurePursuitParams, pure_pursuit_control
 from .costmap import CostMap
 from .dynamic import DynamicObstacleField
 from .local_planner import DWAParams, dwa_control
+from .localization import EKF, LocalizationParams
 from .map import GridMap
 from .planner import astar
+from .sensors import noisy_control, noisy_position
 
 
 Pose = Tuple[float, float, float]
@@ -51,6 +54,49 @@ def simulate_path(
     return poses
 
 
+def _step_pose(pose: Pose, v: float, omega: float, dt: float) -> Pose:
+    x, y, yaw = pose
+    x += v * math.cos(yaw) * dt
+    y += v * math.sin(yaw) * dt
+    yaw += omega * dt
+    return (x, y, yaw)
+
+
+def simulate_path_localized(
+    path: List[Point],
+    start_pose: Pose,
+    params: SimParams,
+    ctrl_params: PurePursuitParams,
+    loc_params: LocalizationParams,
+) -> Tuple[List[Pose], List[Pose]]:
+    rng = random.Random(loc_params.seed)
+    ekf = EKF(start_pose, loc_params)
+    true_poses: List[Pose] = [start_pose]
+    est_poses: List[Pose] = [start_pose]
+    target_idx = 0
+
+    for _ in range(params.max_steps):
+        est_pose = ekf.pose
+        gx, gy = path[-1]
+        if math.hypot(gx - est_pose[0], gy - est_pose[1]) <= params.goal_tolerance:
+            break
+
+        v, omega, target_idx = pure_pursuit_control(
+            est_pose, path, ctrl_params, target_idx
+        )
+
+        true_pose = _step_pose(true_poses[-1], v, omega, params.dt)
+        v_noisy, omega_noisy = noisy_control(v, omega, loc_params.noise, rng)
+        ekf.predict(v_noisy, omega_noisy, params.dt)
+        measurement = noisy_position(true_pose, loc_params.noise, rng)
+        ekf.update(measurement)
+
+        true_poses.append(true_pose)
+        est_poses.append(ekf.pose)
+
+    return true_poses, est_poses
+
+
 def simulate_dwa(
     path: List[Point],
     start_pose: Pose,
@@ -81,6 +127,46 @@ def simulate_dwa(
         poses.append((x, y, yaw))
 
     return poses
+
+
+def simulate_dwa_localized(
+    path: List[Point],
+    start_pose: Pose,
+    params: SimParams,
+    costmap: CostMap,
+    dwa_params: DWAParams,
+    loc_params: LocalizationParams,
+) -> Tuple[List[Pose], List[Pose]]:
+    rng = random.Random(loc_params.seed)
+    ekf = EKF(start_pose, loc_params)
+    true_poses: List[Pose] = [start_pose]
+    est_poses: List[Pose] = [start_pose]
+    stuck_steps = 0
+
+    for _ in range(params.max_steps):
+        est_pose = ekf.pose
+        gx, gy = path[-1]
+        if math.hypot(gx - est_pose[0], gy - est_pose[1]) <= params.goal_tolerance:
+            break
+
+        v, omega, _ = dwa_control(est_pose, path, costmap, dwa_params, params.dt)
+        if abs(v) < 1e-3 and abs(omega) < 1e-3:
+            stuck_steps += 1
+            if stuck_steps >= 10:
+                break
+        else:
+            stuck_steps = 0
+
+        true_pose = _step_pose(true_poses[-1], v, omega, params.dt)
+        v_noisy, omega_noisy = noisy_control(v, omega, loc_params.noise, rng)
+        ekf.predict(v_noisy, omega_noisy, params.dt)
+        measurement = noisy_position(true_pose, loc_params.noise, rng)
+        ekf.update(measurement)
+
+        true_poses.append(true_pose)
+        est_poses.append(ekf.pose)
+
+    return true_poses, est_poses
 
 
 def _grid_to_path(plan: List[Tuple[int, int]]) -> List[Point]:
@@ -161,3 +247,76 @@ def simulate_dwa_dynamic(
         steps_since_replan += 1
 
     return poses, current_path
+
+
+def simulate_dwa_dynamic_localized(
+    path: List[Point],
+    start_pose: Pose,
+    params: SimParams,
+    base_grid: GridMap,
+    inflation_radius: float,
+    dynamic_field: DynamicObstacleField,
+    dwa_params: DWAParams,
+    goal: Tuple[int, int],
+    replan_interval: int,
+    max_replans: int,
+    loc_params: LocalizationParams,
+) -> Tuple[List[Pose], List[Pose], List[Point]]:
+    rng = random.Random(loc_params.seed)
+    ekf = EKF(start_pose, loc_params)
+    true_poses: List[Pose] = [start_pose]
+    est_poses: List[Pose] = [start_pose]
+    current_path = path
+    stuck_steps = 0
+    steps_since_replan = 0
+    replans = 0
+
+    for _ in range(params.max_steps):
+        est_pose = ekf.pose
+        gx, gy = goal
+        if math.hypot(gx - est_pose[0], gy - est_pose[1]) <= params.goal_tolerance:
+            break
+
+        dynamic_field.step(params.dt, base_grid)
+        costmap = CostMap.from_grid(
+            base_grid,
+            inflation_radius,
+            occupied=dynamic_field.cells(base_grid),
+        )
+
+        needs_replan = False
+        if replan_interval > 0 and steps_since_replan >= replan_interval:
+            needs_replan = True
+        if path_in_collision(costmap, current_path):
+            needs_replan = True
+
+        if needs_replan:
+            start_cell = _pose_to_cell(est_pose)
+            plan = astar(costmap.inflated_map(), start_cell, goal)
+            if plan is None:
+                break
+            current_path = _grid_to_path(plan.path)
+            steps_since_replan = 0
+            replans += 1
+            if replans >= max_replans:
+                break
+
+        v, omega, _ = dwa_control(est_pose, current_path, costmap, dwa_params, params.dt)
+        if abs(v) < 1e-3 and abs(omega) < 1e-3:
+            stuck_steps += 1
+            if stuck_steps >= 10:
+                steps_since_replan = replan_interval
+        else:
+            stuck_steps = 0
+
+        true_pose = _step_pose(true_poses[-1], v, omega, params.dt)
+        v_noisy, omega_noisy = noisy_control(v, omega, loc_params.noise, rng)
+        ekf.predict(v_noisy, omega_noisy, params.dt)
+        measurement = noisy_position(true_pose, loc_params.noise, rng)
+        ekf.update(measurement)
+
+        true_poses.append(true_pose)
+        est_poses.append(ekf.pose)
+        steps_since_replan += 1
+
+    return true_poses, est_poses, current_path

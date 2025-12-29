@@ -12,9 +12,19 @@ from navsim.costmap import CostMap
 from navsim.collision import path_in_collision, trajectory_in_collision
 from navsim.dynamic import DynamicObstacle, DynamicObstacleField
 from navsim.local_planner import DWAParams
+from navsim.localization import LocalizationParams
 from navsim.map import GridMap, demo_grid
 from navsim.planner import astar
-from navsim.sim import SimParams, simulate_dwa, simulate_dwa_dynamic, simulate_path
+from navsim.sensors import SensorNoise
+from navsim.sim import (
+    SimParams,
+    simulate_dwa,
+    simulate_dwa_dynamic,
+    simulate_dwa_dynamic_localized,
+    simulate_dwa_localized,
+    simulate_path,
+    simulate_path_localized,
+)
 from navsim.viz import plot_scene, render_gif
 
 
@@ -31,6 +41,8 @@ class DemoConfig:
     dynamic_replan_interval: int
     dynamic_max_replans: int
     dynamic_obstacles: List[DynamicObstacle]
+    localization_enabled: bool
+    localization: LocalizationParams
     lookahead: float
     speed: float
 
@@ -46,6 +58,8 @@ def _load_config(path: Path) -> DemoConfig:
     data = yaml.safe_load(path.read_text()) or {}
     dwa_cfg = data.get("dwa", {}) or {}
     dyn_cfg = data.get("dynamic_obstacles", {}) or {}
+    loc_cfg = data.get("localization", {}) or {}
+    noise_cfg = loc_cfg.get("noise", {}) or {}
     obstacles: List[DynamicObstacle] = []
     for obstacle in dyn_cfg.get("obstacles", []) or []:
         position = obstacle.get("position", [0.0, 0.0])
@@ -80,6 +94,17 @@ def _load_config(path: Path) -> DemoConfig:
         dynamic_replan_interval=int(dyn_cfg.get("replan_interval", 10)),
         dynamic_max_replans=int(dyn_cfg.get("max_replans", 50)),
         dynamic_obstacles=obstacles,
+        localization_enabled=bool(loc_cfg.get("enabled", False)),
+        localization=LocalizationParams(
+            noise=SensorNoise(
+                odom_std_v=float(noise_cfg.get("odom_std_v", 0.05)),
+                odom_std_omega=float(noise_cfg.get("odom_std_omega", 0.05)),
+                meas_std_x=float(noise_cfg.get("meas_std_x", 0.2)),
+                meas_std_y=float(noise_cfg.get("meas_std_y", 0.2)),
+            ),
+            init_cov=float(loc_cfg.get("init_cov", 0.5)),
+            seed=int(loc_cfg.get("seed", 0)),
+        ),
         lookahead=float(data.get("lookahead", 0.8)),
         speed=float(data.get("speed", 0.8)),
     )
@@ -111,35 +136,78 @@ def run_demo(
 
     path = _grid_to_path(plan.path)
     start_pose = (float(cfg.start[0]), float(cfg.start[1]), 0.0)
-    if cfg.dynamic_enabled and dynamic_field is not None:
-        if cfg.local_planner != "dwa":
-            print("Warning: dynamic obstacles require DWA; switching to DWA.")
-        poses, path = simulate_dwa_dynamic(
-            path,
-            start_pose,
-            SimParams(),
-            grid,
-            cfg.inflation_radius,
-            dynamic_field,
-            cfg.dwa,
-            cfg.goal,
-            cfg.dynamic_replan_interval,
-            cfg.dynamic_max_replans,
-        )
-        costmap = CostMap.from_grid(
-            grid,
-            cfg.inflation_radius,
-            occupied=dynamic_field.cells(grid),
-        )
-    elif cfg.local_planner == "dwa":
-        poses = simulate_dwa(path, start_pose, SimParams(), costmap, cfg.dwa)
+    poses = []
+    est_poses = None
+
+    if cfg.localization_enabled:
+        if cfg.dynamic_enabled and dynamic_field is not None:
+            if cfg.local_planner != "dwa":
+                print("Warning: dynamic obstacles require DWA; switching to DWA.")
+            poses, est_poses, path = simulate_dwa_dynamic_localized(
+                path,
+                start_pose,
+                SimParams(),
+                grid,
+                cfg.inflation_radius,
+                dynamic_field,
+                cfg.dwa,
+                cfg.goal,
+                cfg.dynamic_replan_interval,
+                cfg.dynamic_max_replans,
+                cfg.localization,
+            )
+            costmap = CostMap.from_grid(
+                grid,
+                cfg.inflation_radius,
+                occupied=dynamic_field.cells(grid),
+            )
+        elif cfg.local_planner == "dwa":
+            poses, est_poses = simulate_dwa_localized(
+                path,
+                start_pose,
+                SimParams(),
+                costmap,
+                cfg.dwa,
+                cfg.localization,
+            )
+        else:
+            poses, est_poses = simulate_path_localized(
+                path,
+                start_pose,
+                SimParams(),
+                PurePursuitParams(lookahead=cfg.lookahead, speed=cfg.speed),
+                cfg.localization,
+            )
     else:
-        poses = simulate_path(
-            path,
-            start_pose,
-            SimParams(),
-            PurePursuitParams(lookahead=cfg.lookahead, speed=cfg.speed),
-        )
+        if cfg.dynamic_enabled and dynamic_field is not None:
+            if cfg.local_planner != "dwa":
+                print("Warning: dynamic obstacles require DWA; switching to DWA.")
+            poses, path = simulate_dwa_dynamic(
+                path,
+                start_pose,
+                SimParams(),
+                grid,
+                cfg.inflation_radius,
+                dynamic_field,
+                cfg.dwa,
+                cfg.goal,
+                cfg.dynamic_replan_interval,
+                cfg.dynamic_max_replans,
+            )
+            costmap = CostMap.from_grid(
+                grid,
+                cfg.inflation_radius,
+                occupied=dynamic_field.cells(grid),
+            )
+        elif cfg.local_planner == "dwa":
+            poses = simulate_dwa(path, start_pose, SimParams(), costmap, cfg.dwa)
+        else:
+            poses = simulate_path(
+                path,
+                start_pose,
+                SimParams(),
+                PurePursuitParams(lookahead=cfg.lookahead, speed=cfg.speed),
+            )
 
     png_path = out_png if out_png is not None else cfg.output_png
     if path_in_collision(costmap, path):
@@ -155,6 +223,7 @@ def run_demo(
         cfg.goal,
         str(png_path),
         display_grid=costmap.inflated,
+        est_poses=est_poses,
     )
     if out_gif is not None:
         render_gif(
@@ -165,6 +234,7 @@ def run_demo(
             cfg.goal,
             str(out_gif),
             display_grid=costmap.inflated,
+            est_poses=est_poses,
         )
     elif cfg.output_gif is not None:
         render_gif(
@@ -175,6 +245,7 @@ def run_demo(
             cfg.goal,
             str(cfg.output_gif),
             display_grid=costmap.inflated,
+            est_poses=est_poses,
         )
 
 
@@ -205,6 +276,18 @@ def main() -> None:
     )
     parser.add_argument("--replan-interval", type=int, default=None)
     parser.add_argument("--max-replans", type=int, default=None)
+    parser.add_argument(
+        "--localization",
+        dest="localization_enabled",
+        action="store_true",
+        default=None,
+    )
+    parser.add_argument(
+        "--no-localization",
+        dest="localization_enabled",
+        action="store_false",
+        default=None,
+    )
     parser.add_argument("--lookahead", type=float, default=None)
     parser.add_argument("--speed", type=float, default=None)
     args = parser.parse_args()
@@ -228,6 +311,8 @@ def main() -> None:
         cfg.dynamic_replan_interval = args.replan_interval
     if args.max_replans is not None:
         cfg.dynamic_max_replans = args.max_replans
+    if args.localization_enabled is not None:
+        cfg.localization_enabled = args.localization_enabled
     if args.lookahead is not None:
         cfg.lookahead = args.lookahead
     if args.speed is not None:

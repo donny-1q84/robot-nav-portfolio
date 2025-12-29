@@ -19,6 +19,7 @@ def plot_scene(
     goal: Tuple[int, int],
     out_path: str,
     display_grid: List[List[int]] | None = None,
+    est_poses: List[Pose] | None = None,
 ) -> None:
     fig, ax = plt.subplots(figsize=(6, 6))
     grid_data = display_grid if display_grid is not None else grid.grid
@@ -33,6 +34,11 @@ def plot_scene(
         tx = [p[0] for p in poses]
         ty = [p[1] for p in poses]
         ax.plot(tx, ty, color="#ff7f0e", linewidth=2, label="Trajectory")
+
+    if est_poses:
+        ex = [p[0] for p in est_poses]
+        ey = [p[1] for p in est_poses]
+        ax.plot(ex, ey, color="#17becf", linewidth=2, linestyle="--", label="Estimate")
 
     ax.scatter([start[0]], [start[1]], color="#2ca02c", s=80, label="Start")
     ax.scatter([goal[0]], [goal[1]], color="#d62728", s=80, label="Goal")
@@ -56,6 +62,7 @@ def render_gif(
     out_path: str,
     step: int = 3,
     display_grid: List[List[int]] | None = None,
+    est_poses: List[Pose] | None = None,
 ) -> None:
     import imageio.v2 as imageio
 
@@ -71,6 +78,11 @@ def render_gif(
         tx = [p[0] for p in poses[:i]]
         ty = [p[1] for p in poses[:i]]
         ax.plot(tx, ty, color="#ff7f0e", linewidth=2)
+        if est_poses:
+            est_idx = min(i, len(est_poses))
+            ex = [p[0] for p in est_poses[:est_idx]]
+            ey = [p[1] for p in est_poses[:est_idx]]
+            ax.plot(ex, ey, color="#17becf", linewidth=2, linestyle="--")
         ax.scatter([start[0]], [start[1]], color="#2ca02c", s=80)
         ax.scatter([goal[0]], [goal[1]], color="#d62728", s=80)
         ax.set_xlim(-0.5, grid.width - 0.5)

@@ -21,6 +21,11 @@ Their occupied cells are overlaid onto the costmap each step. The planner
 replans when the current path intersects the updated costmap or after a fixed
 step interval.
 
+## Localization
+An EKF estimates the robot pose using noisy odometry (control inputs) and noisy
+position measurements. The controller can use the estimated pose for planning
+and tracking, while the true pose is used for visualization and evaluation.
+
 ## Control
 Pure Pursuit is used with a unicycle model. The controller selects a lookahead
 point on the path and computes curvature from the heading error.

@@ -27,6 +27,11 @@ Enable dynamic obstacles with replanning:
 navsim-demo --dynamic
 ```
 
+Enable EKF localization (shows estimated trajectory):
+```bash
+navsim-demo --localization
+```
+
 ## Parameters
 ```
 --config path  Config file (default: configs/default.yaml)
@@ -40,6 +45,8 @@ navsim-demo --dynamic
 --no-dynamic    Disable dynamic obstacles
 --replan-interval  Steps between replans (default from config)
 --max-replans   Safety cap on replans (default from config)
+--localization  Enable EKF localization
+--no-localization  Disable EKF localization
 --lookahead     Pure pursuit lookahead (default: 0.8)
 --speed         Linear speed (default: 0.8)
 ```
@@ -51,6 +58,7 @@ navsim-demo --dynamic
 - **Controller**: Pure Pursuit with unicycle kinematics.
 - **Costmap**: obstacle inflation for a conservative planning footprint.
 - **Dynamic obstacles**: moving obstacles + periodic replanning.
+- **Localization**: EKF with noisy odometry + position measurements.
 - **Visualization**: map, planned path, and executed trajectory.
 
 Local planner parameters live in `configs/default.yaml` under `dwa`.

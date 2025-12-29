@@ -23,5 +23,14 @@ dynamic_obstacles:
       velocity: [0.6, 0.0]
     - position: [7.0, 2.0]
       velocity: [0.0, 0.6]
+localization:
+  enabled: false
+  seed: 42
+  init_cov: 0.5
+  noise:
+    odom_std_v: 0.05
+    odom_std_omega: 0.05
+    meas_std_x: 0.2
+    meas_std_y: 0.2
 lookahead: 0.8
 speed: 0.8
