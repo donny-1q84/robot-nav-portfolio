@@ -28,3 +28,16 @@ def test_zero_inflation_matches_grid():
     costmap = CostMap.from_grid(grid, 0.0)
     assert costmap.is_occupied((1, 1))
     assert not costmap.is_occupied((1, 0))
+
+
+def test_dynamic_overlay_marks_cells():
+    grid = GridMap(
+        [
+            [0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+        ]
+    )
+    costmap = CostMap.from_grid(grid, 0.0, occupied=[(0, 0), (2, 2)])
+    assert costmap.is_occupied((0, 0))
+    assert costmap.is_occupied((2, 2))

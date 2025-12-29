@@ -3,17 +3,18 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
+from typing import List, Tuple
 
 import yaml
 
 from navsim.control import PurePursuitParams
 from navsim.costmap import CostMap
 from navsim.collision import path_in_collision, trajectory_in_collision
+from navsim.dynamic import DynamicObstacle, DynamicObstacleField
 from navsim.local_planner import DWAParams
 from navsim.map import GridMap, demo_grid
 from navsim.planner import astar
-from navsim.sim import SimParams, simulate_dwa, simulate_path
+from navsim.sim import SimParams, simulate_dwa, simulate_dwa_dynamic, simulate_path
 from navsim.viz import plot_scene, render_gif
 
 
@@ -26,6 +27,10 @@ class DemoConfig:
     inflation_radius: float
     local_planner: str
     dwa: DWAParams
+    dynamic_enabled: bool
+    dynamic_replan_interval: int
+    dynamic_max_replans: int
+    dynamic_obstacles: List[DynamicObstacle]
     lookahead: float
     speed: float
 
@@ -40,6 +45,19 @@ def _parse_point(value: str) -> Tuple[int, int]:
 def _load_config(path: Path) -> DemoConfig:
     data = yaml.safe_load(path.read_text()) or {}
     dwa_cfg = data.get("dwa", {}) or {}
+    dyn_cfg = data.get("dynamic_obstacles", {}) or {}
+    obstacles: List[DynamicObstacle] = []
+    for obstacle in dyn_cfg.get("obstacles", []) or []:
+        position = obstacle.get("position", [0.0, 0.0])
+        velocity = obstacle.get("velocity", [0.0, 0.0])
+        obstacles.append(
+            DynamicObstacle(
+                x=float(position[0]),
+                y=float(position[1]),
+                vx=float(velocity[0]),
+                vy=float(velocity[1]),
+            )
+        )
     return DemoConfig(
         start=tuple(data.get("start", [0, 0])),
         goal=tuple(data.get("goal", [9, 9])),
@@ -58,6 +76,10 @@ def _load_config(path: Path) -> DemoConfig:
             path_weight=float(dwa_cfg.get("path_weight", 0.4)),
             clearance_weight=float(dwa_cfg.get("clearance_weight", 0.2)),
         ),
+        dynamic_enabled=bool(dyn_cfg.get("enabled", False)),
+        dynamic_replan_interval=int(dyn_cfg.get("replan_interval", 10)),
+        dynamic_max_replans=int(dyn_cfg.get("max_replans", 50)),
+        dynamic_obstacles=obstacles,
         lookahead=float(data.get("lookahead", 0.8)),
         speed=float(data.get("speed", 0.8)),
     )
@@ -73,7 +95,15 @@ def run_demo(
     out_png: Path | None = None,
     out_gif: Path | None = None,
 ) -> None:
-    costmap = CostMap.from_grid(grid, cfg.inflation_radius)
+    dynamic_field = None
+    dynamic_cells = None
+    if cfg.dynamic_enabled and cfg.dynamic_obstacles:
+        dynamic_field = DynamicObstacleField(cfg.dynamic_obstacles)
+        dynamic_cells = dynamic_field.cells(grid)
+
+    costmap = CostMap.from_grid(
+        grid, cfg.inflation_radius, occupied=dynamic_cells
+    )
     plan_map = costmap.inflated_map()
     plan = astar(plan_map, cfg.start, cfg.goal)
     if plan is None:
@@ -81,7 +111,27 @@ def run_demo(
 
     path = _grid_to_path(plan.path)
     start_pose = (float(cfg.start[0]), float(cfg.start[1]), 0.0)
-    if cfg.local_planner == "dwa":
+    if cfg.dynamic_enabled and dynamic_field is not None:
+        if cfg.local_planner != "dwa":
+            print("Warning: dynamic obstacles require DWA; switching to DWA.")
+        poses, path = simulate_dwa_dynamic(
+            path,
+            start_pose,
+            SimParams(),
+            grid,
+            cfg.inflation_radius,
+            dynamic_field,
+            cfg.dwa,
+            cfg.goal,
+            cfg.dynamic_replan_interval,
+            cfg.dynamic_max_replans,
+        )
+        costmap = CostMap.from_grid(
+            grid,
+            cfg.inflation_radius,
+            occupied=dynamic_field.cells(grid),
+        )
+    elif cfg.local_planner == "dwa":
         poses = simulate_dwa(path, start_pose, SimParams(), costmap, cfg.dwa)
     else:
         poses = simulate_path(
@@ -141,6 +191,19 @@ def main() -> None:
         choices=["pure_pursuit", "dwa"],
         default=None,
     )
+    parser.add_argument(
+        "--dynamic",
+        dest="dynamic_enabled",
+        action="store_true",
+        default=None,
+    )
+    parser.add_argument(
+        "--no-dynamic",
+        dest="dynamic_enabled",
+        action="store_false",
+    )
+    parser.add_argument("--replan-interval", type=int, default=None)
+    parser.add_argument("--max-replans", type=int, default=None)
     parser.add_argument("--lookahead", type=float, default=None)
     parser.add_argument("--speed", type=float, default=None)
     args = parser.parse_args()
@@ -158,6 +221,12 @@ def main() -> None:
         cfg.inflation_radius = args.inflation_radius
     if args.local_planner is not None:
         cfg.local_planner = args.local_planner
+    if args.dynamic_enabled is not None:
+        cfg.dynamic_enabled = args.dynamic_enabled
+    if args.replan_interval is not None:
+        cfg.dynamic_replan_interval = args.replan_interval
+    if args.max_replans is not None:
+        cfg.dynamic_max_replans = args.max_replans
     if args.lookahead is not None:
         cfg.lookahead = args.lookahead
     if args.speed is not None:

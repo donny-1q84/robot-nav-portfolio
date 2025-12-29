@@ -15,6 +15,12 @@ constant (v, omega) commands, rolls out short trajectories, rejects collisions,
 and scores candidates based on distance to the goal, distance to the global path,
 and obstacle clearance.
 
+## Dynamic Obstacles & Replanning
+Dynamic obstacles move with simple velocities and bounce at map boundaries.
+Their occupied cells are overlaid onto the costmap each step. The planner
+replans when the current path intersects the updated costmap or after a fixed
+step interval.
+
 ## Control
 Pure Pursuit is used with a unicycle model. The controller selects a lookahead
 point on the path and computes curvature from the heading error.

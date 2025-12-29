@@ -22,6 +22,11 @@ Optional GIF:
 navsim-demo --gif output.gif
 ```
 
+Enable dynamic obstacles with replanning:
+```bash
+navsim-demo --dynamic
+```
+
 ## Parameters
 ```
 --config path  Config file (default: configs/default.yaml)
@@ -31,6 +36,10 @@ navsim-demo --gif output.gif
 --gif path      Optional GIF path
 --inflation-radius  Obstacle inflation radius (grid units)
 --local-planner     Local planner: pure_pursuit or dwa
+--dynamic       Enable dynamic obstacles (uses DWA)
+--no-dynamic    Disable dynamic obstacles
+--replan-interval  Steps between replans (default from config)
+--max-replans   Safety cap on replans (default from config)
 --lookahead     Pure pursuit lookahead (default: 0.8)
 --speed         Linear speed (default: 0.8)
 ```
@@ -41,6 +50,7 @@ navsim-demo --gif output.gif
 - **Local Planner**: DWA-lite (trajectory rollout + scoring).
 - **Controller**: Pure Pursuit with unicycle kinematics.
 - **Costmap**: obstacle inflation for a conservative planning footprint.
+- **Dynamic obstacles**: moving obstacles + periodic replanning.
 - **Visualization**: map, planned path, and executed trajectory.
 
 Local planner parameters live in `configs/default.yaml` under `dwa`.
